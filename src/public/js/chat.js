@@ -53,14 +53,14 @@ socket.on('Message',({message,createdAt})=>{
 })
 
 socket.on('locationMessage',({username,message,createdAt})=>{
-    if(username === myName)    username='You'
+    if(username === myName.toLowerCase())    username='You'
     const html = Mustache.render(locationTemplate,{username,url:message,createdAt: moment(createdAt).format('h:mm a')})
     $messages.insertAdjacentHTML('beforeend',html)
     autoscroll();
 })
 
 socket.on('receiveMessage',({username,message,createdAt})=>{
-    if(username === myName)    username='You'
+    if(username === myName.toLowerCase())    username='You'
     const html = Mustache.render(messageTemplate,{username,message,createdAt: moment(createdAt).format('h:mm a')})
     $messages.insertAdjacentHTML('beforeend',html)
     autoscroll();
