@@ -1,0 +1,9 @@
+
+.tab {
+  display: none;
+}
+        @media screen and (max-width:499px) {
+            form{
+                width: 79vw;
+            }
+        }
