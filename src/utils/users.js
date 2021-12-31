@@ -2,7 +2,6 @@ const users = [];
 const rooms = [];
 
 const addRoom = ( roomName, password ) => {
-  console.log(roomName , password)
   if (!roomName || !password) {
     return { error: "Invalid input" };
   }

@@ -18,7 +18,7 @@ app.use(express.json())
 app.use(express.urlencoded({ extended: true, limit: "10 mb" }));
 
 app.get('/getRooms', (req, res) => {
-    res.send(getRooms());
+    res.send(getRooms().filter((room)=>getUsersInRoom(room).length <= 15));
 })
 
 
