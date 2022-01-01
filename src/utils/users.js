@@ -2,6 +2,7 @@ const users = [];
 const rooms = [];
 
 const addRoom = ( roomName, password ) => {
+  roomName.trim().toLowerCase()
   if (!roomName || !password) {
     return { error: "Invalid input" };
   }
@@ -12,12 +13,13 @@ const addRoom = ( roomName, password ) => {
     return { error: "Room already exist" };
   }
 
-  rooms.push({name : roomName, password });
+  rooms.push({name : roomName, password , numberOfUser : 0 });
 
-  return {}
+  return {};
 };
 
 const removeRoom = (roomName) => {
+  roomName.trim().toLowerCase()
   const index = rooms.findIndex((room) => {
     return room.name === roomName;
   });
@@ -27,11 +29,21 @@ const removeRoom = (roomName) => {
   }
 };
 
+// const addUserInRoom = (roomName)=>{
+//   const requiredRoom = rooms.find((room)=> roomName === room.name);
+//   console.log(rooms)
+//   requiredRoom.numberOfUser++;
+//   console.log(rooms)
+// } 
+
 const getRooms = ()=>  rooms.map(room => room.name);
 
-const getRoom = (roomName)=> rooms.find((room)=>room.name === roomName)
+const getRoom = (roomName)=>{
+  roomName.trim().toLowerCase();
+  return rooms.find((room)=>room.name === roomName)
+} 
 
-const addUser = ({ _id, username, room }) => {
+const addUser = ( username, room ) => {
   username = username.trim().toLowerCase();
   room = room.trim().toLowerCase();
 
@@ -61,11 +73,36 @@ const addUser = ({ _id, username, room }) => {
     };
   }
 
-  const user = { _id, username, room };
+  const user = {  username, room };
 
   users.push(user);
 
   return { user };
+};
+
+const verifyUser = ({ _id, username, room }) => {
+  username = username.trim().toLowerCase();
+  room = room.trim().toLowerCase();
+
+  //validated data
+  if (!username || !room) {
+    return { error: "Username and room are required" };
+  }
+
+  //finding if already exist
+  const existingUser = users.find((user) => {
+    return user.room === room && user.username === username;
+  });
+
+  //if already exist
+  if (!existingUser) {
+    return {
+      error: "User is not authorized to enter this chat room. User must enter the chatroom through password",
+    };
+  }
+
+  existingUser._id = _id
+  return { user:existingUser };
 };
 
 const removeUser = (id) => {
@@ -77,7 +114,7 @@ const removeUser = (id) => {
     const removedUser = users.splice(index, 1)[0];
     const otherUser = getUsersInRoom(removedUser.room);
 
-    if (!otherUser) {
+    if (otherUser.length === 0) {
       removeRoom(removedUser.room);
     }
 
@@ -100,6 +137,7 @@ module.exports = {
   getUsersInRoom,
   addRoom,
   getRooms,
-  getRoom
+  getRoom,
+  verifyUser
 };
 

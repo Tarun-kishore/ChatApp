@@ -4,7 +4,8 @@ const socketio = require('socket.io')
 const { Socket } = require('dgram')
 const Filter = require('bad-words')
 const { generateMessage } = require('./utils/messages')
-const { addUser, removeUser, getUser, getUsersInRoom, addRoom, getRooms, getRoom } = require('./utils/users')
+const { addUser, removeUser, getUser, getUsersInRoom, addRoom, getRooms, getRoom, verifyUser } = require('./utils/users')
+const errorMessage = require('./utils/errorPage')
 const { Router } = require('express')
 
 const app = express()
@@ -18,7 +19,7 @@ app.use(express.json())
 app.use(express.urlencoded({ extended: true, limit: "10 mb" }));
 
 app.get('/getRooms', (req, res) => {
-    res.send(getRooms().filter((room)=>getUsersInRoom(room).length <= 15));
+    res.send(getRooms().filter((room) => getUsersInRoom(room).length <= 15));
 })
 
 
@@ -27,26 +28,30 @@ app.post('/selectRoom', (req, res) => {
     const room = req.body.newRoom || req.body.oldRoom
 
     if (isNew) {
-        if (getRoom(room)) return res.status(400).send('The room already exist. Please try different name.');
+        if (getRoom(room)) return res.status(400).send(errorMessage('The room already exist. Please try different name.'));
 
         const { error } = addRoom(room, req.body.password)
-        if (error) return res.send(error)
+        if (error) return res.send(errorMessage(error))
 
-        return res.redirect(`/chat.html?username=${req.body.username}&room=${room}`)
+        const { error : err, user } = addUser(req.body.username, room);
+        if (err) return res.send(errorMessage(err))
+        return res.redirect(`/chat.html?username=${user.username}&room=${user.room}`)
     }
-    
+
     const roomTobeJoined = getRoom(room)
-    if (!roomTobeJoined) return res.status(404).send('The room does not exist');
-    
-    if(req.body.password !== roomTobeJoined.password)   return res.send('Wrong password')
-    
-    return res.redirect(`/chat.html?username=${req.body.username}&room=${room}`)
+    if (!roomTobeJoined) return res.status(404).send(errorMessage('The room does not exist'));
+
+    if (req.body.password !== roomTobeJoined.password) return res.send(errorMessage('Wrong password'))
+
+    const { error :err, user } = addUser(req.body.username, room);
+    if (err) return res.send(errorMessage(err))
+    res.redirect(`/chat.html?username=${user.username}&room=${user.room}`)
 })
 
 
 io.on('connection', (socket) => {
     socket.on('join', (options, callback) => {
-        const { error, user } = addUser({ _id: socket.id, ...options })
+        const { error, user } = verifyUser({ _id: socket.id, ...options })
 
         if (error) {
             return callback(error)

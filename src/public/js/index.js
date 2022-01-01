@@ -109,7 +109,9 @@ fetch('/getRooms', {
             const label = document.createElement('label');
             label.setAttribute('for',room);
             label.innerText = room
-            roomList.appendChild(element)
-            roomList.appendChild(label)
+            const wrapper = document.createElement('div')
+            wrapper.appendChild(element)
+            wrapper.appendChild(label)
+            roomList.appendChild(wrapper)
         });
     })
