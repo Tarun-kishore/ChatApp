@@ -1,49 +1,95 @@
-const users = [];
-const rooms = [];
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 
-const addRoom = ( roomName, password ) => {
-  roomName.trim().toLowerCase()
+const roomSchema = mongoose.Schema({
+  roomName: {
+    type: String,
+    required: true,
+    trim: true,
+  },
+  password: {
+    type: String,
+    required: true,
+  },
+});
+
+roomSchema.pre("save", async function (next) {
+  const room = this;
+
+  if (room.isModified("password")) {
+    room.password = await bcrypt.hash(room.password, 8);
+  }
+  next();
+});
+
+roomSchema.methods.comparePass = async function (password) {
+  const room = this;
+
+  const isMatch = await bcrypt.compare(password, room.password);
+
+  return isMatch;
+};
+
+const Room = mongoose.model("Room", roomSchema);
+
+const userSchema = mongoose.Schema({
+  userName: {
+    type: String,
+    required: true,
+  },
+  socketId: {
+    type: String,
+    default: null,
+  },
+  room: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+    ref: "Room",
+  },
+});
+
+const User = mongoose.model("User", userSchema);
+
+const addRoom = async (roomName, password) => {
+  roomName.trim().toLowerCase();
   if (!roomName || !password) {
     return { error: "Invalid input" };
   }
 
-  const existingRoom = rooms.find((room) => roomName === room.name);
+  //const existingRoom = rooms.find((room) => roomName === room.name);
+  const existingRoom = await Room.findOne({ roomName: roomName });
 
   if (existingRoom) {
     return { error: "Room already exist" };
   }
 
-  rooms.push({name : roomName, password , numberOfUser : 0 });
+  //rooms.push({ name: roomName, password, numberOfUser: 0 });
+  const newRoom = new Room({ roomName, password });
+
+  await newRoom.save();
 
   return {};
 };
 
-const removeRoom = (roomName) => {
-  roomName.trim().toLowerCase()
-  const index = rooms.findIndex((room) => {
-    return room.name === roomName;
-  });
-
-  if (index !== -1) {
-    return rooms.splice(index, 1)[0];
-  }
+const removeRoom = async (roomName) => {
+  roomName.trim().toLowerCase();
+  await Room.deleteOne({ roomName });
 };
 
-// const addUserInRoom = (roomName)=>{
-//   const requiredRoom = rooms.find((room)=> roomName === room.name);
-//   console.log(rooms)
-//   requiredRoom.numberOfUser++;
-//   console.log(rooms)
-// } 
+const getRooms = async () => {
+  const rooms = await Room.find({});
+  const temp = [];
+  rooms.forEach((room) => temp.push(room.roomName));
+  return temp;
+};
 
-const getRooms = ()=>  rooms.map(room => room.name);
-
-const getRoom = (roomName)=>{
+const getRoom = async (roomName) => {
   roomName.trim().toLowerCase();
-  return rooms.find((room)=>room.name === roomName)
-} 
+  const room = await Room.findOne({ roomName });
+  return room;
+};
 
-const addUser = ( username, room ) => {
+const addUser = async (username, room) => {
   username = username.trim().toLowerCase();
   room = room.trim().toLowerCase();
 
@@ -52,9 +98,12 @@ const addUser = ( username, room ) => {
     return { error: "Username and room are required" };
   }
 
+  //Getting the room number
+  const roomObject = await getRoom(room);
   //finding if already exist
-  const existingUser = users.find((user) => {
-    return user.room === room && user.username === username;
+  const existingUser = await User.findOne({
+    room: roomObject.id,
+    userName: username,
   });
 
   //if already exist
@@ -73,14 +122,19 @@ const addUser = ( username, room ) => {
     };
   }
 
-  const user = {  username, room };
+  const user = { username, room };
 
-  users.push(user);
+  const userObject = new User({
+    userName: username,
+    socketId: null,
+    room: roomObject.id,
+  });
 
+  await userObject.save();
   return { user };
 };
 
-const verifyUser = ({ _id, username, room }) => {
+const verifyUser = async ({ _id, username, room }) => {
   username = username.trim().toLowerCase();
   room = room.trim().toLowerCase();
 
@@ -89,45 +143,62 @@ const verifyUser = ({ _id, username, room }) => {
     return { error: "Username and room are required" };
   }
 
+  //Getting the room number
+  const roomObject = await getRoom(room);
   //finding if already exist
-  const existingUser = users.find((user) => {
-    return user.room === room && user.username === username;
+  const existingUser = await User.findOne({
+    room: roomObject.id,
+    userName: username,
   });
 
   //if already exist
   if (!existingUser) {
     return {
-      error: "User is not authorized to enter this chat room. User must enter the chatroom through password",
+      error:
+        "User is not authorized to enter this chat room. User must enter the chatroom through password",
     };
   }
 
-  existingUser._id = _id
-  return { user:existingUser };
+  existingUser.socketId = _id;
+  await existingUser.save();
+  const user = { username, room };
+  return { user };
 };
 
-const removeUser = (id) => {
-  const index = users.findIndex((user) => {
-    return user._id === id;
-  });
+const removeUser = async (id) => {
+  const user = await User.findOne({ socketId: id });
 
-  if (index !== -1) {
-    const removedUser = users.splice(index, 1)[0];
-    const otherUser = getUsersInRoom(removedUser.room);
+  const returnObj = {};
+  if (user) {
+    const removedUser = user;
+    returnObj.username = removedUser.userName;
+    const removedUserRoom = await Room.findById(user.room);
+    returnObj.room = removedUserRoom.roomName;
+    await user.remove();
+    const otherUser = await getUsersInRoom(removedUserRoom.roomName);
 
     if (otherUser.length === 0) {
-      removeRoom(removedUser.room);
+      removeRoom(removedUserRoom.roomName);
     }
 
-    return removedUser;
+    return returnObj;
   }
 };
 
-const getUser = (id) => {
-  return users.find((user) => user._id === id);
+const getUser = async (id) => {
+  const user = await User.findOne({ socketId: id });
+  const room = await Room.findById(user.room);
+  return { username: user.userName, room: room.roomName };
 };
 
-const getUsersInRoom = (room) => {
-  return users.filter((user) => user.room === room);
+const getUsersInRoom = async (room) => {
+  const roomObject = await Room.findOne({ roomName: room });
+  if (!roomObject) return {};
+  const user = await User.find({ room: roomObject.id });
+
+  const temp = [];
+  user.forEach((userElement) => temp.push({ username: userElement.userName }));
+  return temp;
 };
 
 module.exports = {
@@ -138,6 +209,5 @@ module.exports = {
   addRoom,
   getRooms,
   getRoom,
-  verifyUser
+  verifyUser,
 };
-
